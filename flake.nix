@@ -60,26 +60,8 @@
                 # Derived from previous flake iteration.
                 packages = (with pkgs; [
                   cmake
-                  binutils
-                  coreutils
-                  dbus
-                  fontconfig
-                  freetype
-                  gdb
-                  glib
-                  libGL
-                  libGLU
-                  libgcc
-                  libxkbcommon
-                  mypy
-                  ruff
-                  xorg.libxcb
-                  zstd
                 ])
                 ++ (with qt6Pkgs; [
-                  qt6.full
-                  qt6.qtbase
-                  qt6.qtwayland
                   qtcreator
                 ]);
 
@@ -88,10 +70,16 @@
                     setQtEnv = pkgs.runCommand "set-qt-env"
                       {
                         buildInputs = with qt6Pkgs.qt6; [
-                          qtbase # Needed by wrapQtAppsHook.
-                          wrapQtAppsHook
+                          full
                         ];
-                        nativeBuildInputs = with pkgs; [ makeShellWrapper ];
+
+                        nativeBuildInputs = (with pkgs; [
+                          makeShellWrapper
+                        ])
+                        ++ (with qt6Pkgs.qt6; [
+                          qtbase
+                          wrapQtAppsHook
+                        ]);
                       }
                       ''
                         makeShellWrapper "$(type -p sh)" "$out" "''${qtWrapperArgs[@]}"
@@ -114,25 +102,16 @@
                   # See supposed alternative below, further research required.
                   LD_LIBRARY_PATH = lib.makeLibraryPath (
                     (with pkgs; [
-                      dbus
                       fontconfig
                       freetype
-                      gcc-unwrapped
                       glib
-                      libglvnd
                       libkrb5
                       libpulseaudio
                       libxkbcommon
                       stdenv.cc.cc.lib
                       wayland
-                      xorg.libxcb
-                      xorg.libXrandr
-                      zlib
-                      zstd
                     ])
                     ++ (with qt6Pkgs.qt6; [
-                      qtbase
-                      qtwayland
                       full
                     ])
                   );
