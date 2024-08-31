@@ -29,7 +29,7 @@
         # see https://github.com/nix-community/poetry2nix/tree/master#api for more functions and examples.
         pkgs = nixpkgs.legacyPackages.${system}.extend inputs.poetry2nix.overlays.default;
 
-        # override some python build dependencies
+        # override some missing dependencies for python packages
         # https://github.com/nix-community/poetry2nix/blob/8ffbc64abe7f432882cb5d96941c39103622ae5e/docs/edgecases.md#modulenotfounderror-no-module-named-packagename
         pypkgs-build-requirements = {
           #python-xlib = [ "setuptools" "setuptools-scm" ];
@@ -54,9 +54,26 @@
           # };
 
           python = pkgs.python312;
-          overrides = p2n-overrides;
+          preferWheels = false;
 
-          preferWheels = true;
+          overrides = p2n-overrides.extend
+            # https://github.com/nix-community/poetry2nix/blob/7619e43/docs/edgecases.md#modulenotfounderror-no-module-named-packagename
+            (final: prev: {
+              pyside6-essentials = prev.pyside6-essentials.overridePythonAttrs (
+                old: {
+                  # prevent error: "Error: wrapQtAppsHook is not used, and dontWrapQtApps is not set."
+                  dontWrapQtApps = true;
+
+                  # satisfy some missing auto-patchelf libraries for PySide6-Essentials
+                  buildInputs = (old.buildInputs ++ (with qt6Pkgs; [
+                    qt6.qtquick3d
+                    qt6.qtvirtualkeyboard
+                    qt6.qtwebengine
+                  ]))
+                  ++ [ ];
+                }
+              );
+            });
 
           pythonRelaxDeps = [ ];
 
@@ -82,6 +99,8 @@
             # zstd
           ])
           ++ (with qt6Pkgs; [
+            # `qt6.full` prevents error on KDE systems:
+            # "Cannot mix incompatible Qt library (6.7.2) with this library (6.7.1)""
             qt6.full
             # qt6.qtquick3d
             # qt6.qtvirtualkeyboard
@@ -97,7 +116,7 @@
           ])
           ++ additionalPackages;
 
-          buildInputs = [ ] ++ additionalPackages;
+          buildInputs = with pkgs; [ ] ++ additionalPackages;
 
           propogatedBuildInputs = with pkgs; [
             # mesa
@@ -109,15 +128,10 @@
 
           LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
 
-          # autoPatchelfIgnoreMissingDeps = pkgs.lib.optionals pkgs.stdenv.isLinux [
-          #   "libQt6VirtualKeyboardSettings.so.6"
-          #   "libQt6VirtualKeyboard.so.6"
-          # ];
+          # dontWrapQtApps = true;
 
-          # postInstall = ''
-          #   wrapProgram "$out/bin/tagstudio" \
-          #     --prefix PATH : ${nixpkgs.lib.makeBinPath [ pkgs.gtk3 pkgs.gobject-introspection pkgs.python312.pkgs.pygobject3 ]} \
-          #     --prefix LD_LIBRARY_PATH : ${nixpkgs.lib.makeLibraryPath [ pkgs.gtk3 pkgs.gobject-introspection pkgs.python312.pkgs.pygobject3 ]}
+          # preFixup = ''
+          #   wrapQtApp "$out/bin/tagstudio_dev" --prefix PATH : /path/to/bin
           # '';
         };
       in
@@ -127,12 +141,6 @@
           tagstudio = tagstudioApp;
           default = tagstudioApp;
         };
-
-        # apps.${system}.default = {
-        #   type = "app";
-        #   # replace <script> with the name in the [tool.poetry.scripts] section of your pyproject.toml
-        #   program = "${tagstudioApp}/bin/tagstudio";
-        # };
 
         # Shell for app dependencies.
         # $> nix develop
