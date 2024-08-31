@@ -2,22 +2,7 @@
   description = "TagStudio";
 
   inputs = {
-    devenv.url = "github:cachix/devenv";
-
-    devenv-root = {
-      url = "file+file:///dev/null";
-      flake = false;
-    };
-
-    flake-parts = {
-      url = "github:hercules-ci/flake-parts";
-      inputs.nixpkgs-lib.follows = "nixpkgs";
-    };
-
-    nix2container = {
-      url = "github:nlewo/nix2container";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    flake-parts.url = "github:hercules-ci/flake-parts";
 
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
@@ -25,163 +10,157 @@
     nixpkgs-qt6.url = "github:NixOS/nixpkgs/e6cea36f83499eb4e9cd184c8a8e823296b50ad5";
 
     systems.url = "github:nix-systems/default-linux";
+
+    flake-utils = {
+      url = "github:numtide/flake-utils";
+      inputs.systems.follows = "systems";
+    };
+
+    poetry2nix.url = "github:nix-community/poetry2nix";
   };
 
-  outputs = { flake-parts, nixpkgs, nixpkgs-qt6, self, systems, ... }@inputs:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      imports = [ inputs.devenv.flakeModule ];
+  outputs = { self, nixpkgs, flake-utils, ... } @inputs:
+    inputs.flake-utils.lib.eachDefaultSystem (system:
+      let
+        inherit (nixpkgs) lib;
 
-      systems = import systems;
+        qt6Pkgs = import inputs.nixpkgs-qt6 { inherit system; };
 
-      perSystem = { config, pkgs, system, ... }:
-        let
-          inherit (nixpkgs) lib;
+        # see https://github.com/nix-community/poetry2nix/tree/master#api for more functions and examples.
+        pkgs = nixpkgs.legacyPackages.${system}.extend inputs.poetry2nix.overlays.default;
 
-          qt6Pkgs = import nixpkgs-qt6 { inherit system; };
-        in
-        {
-          devenv.shells = rec {
-            default = tagstudio;
-
-            tagstudio =
-              let
-                cfg = config.devenv.shells.tagstudio;
-              in
-              {
-                # NOTE: many things were simply transferred over from previous,
-                # there must be additional work in ensuring all relevant dependencies
-                # are in place (and no extraneous). I have already spent much
-                # work making this in the first place and just need to get it out
-                # there, especially after my promises. Would appreciate any help
-                # (possibly PRs!) on taking care of this. Otherwise, just expect
-                # this to get ironed out over time.
-                #
-                # Thank you! -Xarvex
-
-                devenv.root =
-                  let
-                    devenvRoot = builtins.readFile inputs.devenv-root.outPath;
-                  in
-                  # If not overriden (/dev/null), --impure is necessary.
-                  pkgs.lib.mkIf (devenvRoot != "") devenvRoot;
-
-                name = "TagStudio";
-
-                # Derived from previous flake iteration.
-                packages = (with pkgs; [
-                  cmake
-                  binutils
-                  coreutils
-                  dbus
-                  fontconfig
-                  freetype
-                  gdb
-                  glib
-                  libGL
-                  libGLU
-                  libgcc
-                  libxkbcommon
-                  mypy
-                  ruff
-                  xorg.libxcb
-                  zstd
-                ])
-                ++ (with qt6Pkgs; [
-                  qt6.full
-                  qt6.qtbase
-                  qt6.qtwayland
-                  qtcreator
-                ]);
-
-                enterShell =
-                  let
-                    setQtEnv = pkgs.runCommand "set-qt-env"
-                      {
-                        buildInputs = with qt6Pkgs.qt6; [
-                          qtbase
-                        ];
-
-                        nativeBuildInputs = (with pkgs; [
-                          makeShellWrapper
-                        ])
-                        ++ (with qt6Pkgs.qt6; [
-                          wrapQtAppsHook
-                        ]);
-                      }
-                      ''
-                        makeShellWrapper "$(type -p sh)" "$out" "''${qtWrapperArgs[@]}"
-                        sed "/^exec/d" -i "$out"
-                      '';
-                  in
-                  ''
-                    source ${setQtEnv}
-                  '';
-
-                scripts.tagstudio.exec = ''
-                  python ${cfg.devenv.root}/tagstudio/tag_studio.py
-                '';
-
-                env = {
-                  QT_QPA_PLATFORM = "wayland;xcb";
-
-                  # Derived from previous flake iteration.
-                  # Not desired given LD_LIBRARY_PATH pollution.
-                  # See supposed alternative below, further research required.
-                  LD_LIBRARY_PATH = lib.makeLibraryPath (
-                    (with pkgs; [
-                      dbus
-                      fontconfig
-                      freetype
-                      gcc-unwrapped
-                      glib
-                      libglvnd
-                      libkrb5
-                      libpulseaudio
-                      libva
-                      libxkbcommon
-                      openssl
-                      stdenv.cc.cc.lib
-                      wayland
-                      xorg.libxcb
-                      xorg.libXrandr
-                      zlib
-                      zstd
-                    ])
-                    ++ (with qt6Pkgs.qt6; [
-                      qtbase
-                      qtwayland
-                      full
-                    ])
-                  );
-                };
-
-                languages.python = {
-                  enable = true;
-                  venv = {
-                    enable = true;
-                    quiet = true;
-                    requirements =
-                      let
-                        excludeDeps = req: deps: builtins.concatStringsSep "\n"
-                          (builtins.filter (line: !(lib.any (elem: lib.hasPrefix elem line) deps))
-                            (lib.splitString "\n" req));
-                      in
-                      ''
-                        ${builtins.readFile ./requirements.txt}
-                        ${excludeDeps (builtins.readFile ./requirements-dev.txt) [
-                          "mypy"
-                          "ruff"
-                        ]}
-                      '';
-                  };
-
-                  # Should be able to replace LD_LIBRARY_PATH?
-                  # Was not quite able to get working,
-                  # will be consulting cachix community. -Xarvex
-                  # libraries = with pkgs; [ ];
-                };
-              };
-          };
+        # override some python build dependencies
+        # https://github.com/nix-community/poetry2nix/blob/8ffbc64abe7f432882cb5d96941c39103622ae5e/docs/edgecases.md#modulenotfounderror-no-module-named-packagename
+        pypkgs-build-requirements = {
+          #python-xlib = [ "setuptools" "setuptools-scm" ];
         };
-    };
+        p2n-overrides = pkgs.poetry2nix.defaultPoetryOverrides.extend (self: super:
+          builtins.mapAttrs
+            (package: build-requirements:
+              (builtins.getAttr package super).overridePythonAttrs (old: {
+                buildInputs = (old.buildInputs or [ ]) ++ (builtins.map (pkg: if builtins.isString pkg then builtins.getAttr pkg super else pkg) build-requirements);
+              })
+            )
+            pypkgs-build-requirements
+        );
+
+        inherit (inputs.poetry2nix.lib.mkPoetry2Nix { inherit pkgs; }) mkPoetryApplication;
+
+        tagstudioApp = mkPoetryApplication rec {
+          projectDir = self;
+
+          # editablePackageSources = {
+          #   tagstudio = ./tagstudio;
+          # };
+
+          python = pkgs.python312;
+          overrides = p2n-overrides;
+
+          preferWheels = true;
+
+          pythonRelaxDeps = [ ];
+
+          additionalPackages = (with pkgs; [
+            # python312.pkgs.pyside6
+            dbus
+            fontconfig
+            freetype
+            glib
+            libGL
+            libkrb5
+            libpulseaudio
+            libva
+            libxkbcommon
+            # mesa contains libgbm
+            # mesa
+            openssl
+            stdenv.cc.cc.lib
+            wayland
+            xorg.libxcb
+            xorg.libXrandr
+            # QT 6.7.0
+            # zstd
+          ])
+          ++ (with qt6Pkgs; [
+            qt6.full
+            # qt6.qtquick3d
+            # qt6.qtvirtualkeyboard
+            # qt6.qtwebengine
+          ]);
+
+          nativeBuildInputs = (with pkgs; [
+            makeWrapper
+          ])
+          ++ (with qt6Pkgs; [
+            qt6.qtbase
+            qt6.wrapQtAppsHook
+          ])
+          ++ additionalPackages;
+
+          buildInputs = [ ] ++ additionalPackages;
+
+          propogatedBuildInputs = with pkgs; [
+            # mesa
+            # python312.pkgs.pyside6
+            # qt6.qtquick3d
+            # qt6.qtvirtualkeyboard
+            # qt6.qtwebengine
+          ] ++ additionalPackages;
+
+          LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
+
+          # autoPatchelfIgnoreMissingDeps = pkgs.lib.optionals pkgs.stdenv.isLinux [
+          #   "libQt6VirtualKeyboardSettings.so.6"
+          #   "libQt6VirtualKeyboard.so.6"
+          # ];
+
+          # postInstall = ''
+          #   wrapProgram "$out/bin/tagstudio" \
+          #     --prefix PATH : ${nixpkgs.lib.makeBinPath [ pkgs.gtk3 pkgs.gobject-introspection pkgs.python312.pkgs.pygobject3 ]} \
+          #     --prefix LD_LIBRARY_PATH : ${nixpkgs.lib.makeLibraryPath [ pkgs.gtk3 pkgs.gobject-introspection pkgs.python312.pkgs.pygobject3 ]}
+          # '';
+        };
+      in
+      {
+        # $> nix build .
+        packages = {
+          tagstudio = tagstudioApp;
+          default = tagstudioApp;
+        };
+
+        # apps.${system}.default = {
+        #   type = "app";
+        #   # replace <script> with the name in the [tool.poetry.scripts] section of your pyproject.toml
+        #   program = "${tagstudioApp}/bin/tagstudio";
+        # };
+
+        # Shell for app dependencies.
+        # $> nix develop
+        #
+        # Use this shell for developing your app.
+        devShells.default = pkgs.mkShell {
+          inputsFrom = [ self.packages.${system}.tagstudio ];
+        };
+
+        # Shell for poetry.
+        # $> nix develop .#poetry
+        #
+        # Use this shell for changes to pyproject.toml and poetry.lock.
+        #   - Run `poetry install to generate an inital lock file.
+        #   - Run `poetry lock` after changing dependencies.
+        #   - Run `poetry run tagstudio` to execute the application.
+        devShells.poetry = pkgs.mkShell rec {
+          packages = with pkgs; [
+            poetry
+            cmake
+            mypy
+            ruff
+          ] ++ (with qt6Pkgs; [
+            qtcreator
+          ])
+          ++ tagstudioApp.additionalPackages;
+
+          LD_LIBRARY_PATH = lib.makeLibraryPath packages;
+        };
+      });
 }

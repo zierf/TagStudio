@@ -7,3 +7,52 @@ disable_error_code = ["union-attr", "annotation-unchecked", "import-untyped"]
 explicit_package_bases = true
 warn_unused_ignores = true
 exclude = ['tests']
+
+[tool.poetry]
+name = "TagStudio"
+version = "9.3.2"
+description = "TagStudio"
+homepage = "https://github.com/TagStudioDev/TagStudio"
+authors = ["zierf <9168602+zierf@users.noreply.github.com>"]
+license = "GPL-3.0-or-later"
+readme = "README.md"
+# https://python-poetry.org/docs/pyproject/#include-and-exclude
+# exclude = [
+#   "tagstudio/.github",
+#   "tagstudio/.vscode",
+#   "tagstudio/**/*.bat",
+#   "tagstudio/**/*.spec",
+# ]
+# packages = [
+#   { include = "tagstudio", from = "." },
+# ]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.dependencies]
+python = "~3.12"
+humanfriendly = "10.0"
+opencv_python = ">=4.8.0.74,<=4.9.0.80"
+Pillow = "10.3.0"
+PySide6 = "6.7.1"
+PySide6_Addons= "6.7.1"
+PySide6_Essentials = "6.7.1"
+typing_extensions = ">=3.10.0.0,<=4.11.0"
+ujson = ">=5.8.0,<=5.9.0"
+numpy = "1.26.4"
+rawpy = "0.21.0"
+pillow-heif = "0.16.0"
+chardet = "5.2.0"
+
+[tool.poetry.group.dev.dependencies]
+#mypy = "1.10.0"
+pre-commit = "3.7.0"
+pytest = "8.2.0"
+Pyinstaller = "6.6.0"
+#ruff = "0.4.2"
+syrupy = "4.6.1"
+
+[tool.poetry.scripts]
+tagstudio = 'tagstudio.tag_studio:main'
