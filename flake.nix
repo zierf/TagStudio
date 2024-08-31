@@ -20,6 +20,7 @@
   };
 
   outputs = { self, nixpkgs, flake-utils, ... } @inputs:
+    # TODO https://github.com/NixOS/templates/blob/master/python/flake.nix
     inputs.flake-utils.lib.eachDefaultSystem (system:
       let
         inherit (nixpkgs) lib;
@@ -53,32 +54,42 @@
           #   tagstudio = ./tagstudio;
           # };
 
-          python = pkgs.python312;
-          preferWheels = false;
+          exeName = "tagstudio";
+
+          python = pkgs.python312Full;
+          dontWrapQtApps = false;
+
+          # preferWheels to resolve typing stubs error for opencv-python:
+          #   'Failed to resolve alias "GProtoArg" exposed as "GProtoArg"'
+          # https://github.com/opencv/opencv-python/issues/1010
+          preferWheels = true;
 
           overrides = p2n-overrides.extend
             # https://github.com/nix-community/poetry2nix/blob/7619e43/docs/edgecases.md#modulenotfounderror-no-module-named-packagename
             (final: prev: {
-              pyside6-essentials = prev.pyside6-essentials.overridePythonAttrs (
-                old: {
-                  # prevent error: "Error: wrapQtAppsHook is not used, and dontWrapQtApps is not set."
-                  dontWrapQtApps = true;
+              pyside6-essentials = prev.pyside6-essentials.overridePythonAttrs (old: {
+                # prevent error: 'Error: wrapQtAppsHook is not used, and dontWrapQtApps is not set.'
+                dontWrapQtApps = true;
 
-                  # satisfy some missing auto-patchelf libraries for PySide6-Essentials
-                  buildInputs = (old.buildInputs ++ (with qt6Pkgs; [
-                    qt6.qtquick3d
-                    qt6.qtvirtualkeyboard
-                    qt6.qtwebengine
-                  ]))
-                  ++ [ ];
-                }
-              );
+                # satisfy some missing libraries for auto-patchelf patching PySide6-Essentials
+                buildInputs = (old.buildInputs ++ (with pkgs; [
+                  qt6.qtquick3d
+                  qt6.qtvirtualkeyboard
+                  qt6.qtwebengine
+                ]))
+                ++ [ ];
+              });
             });
 
-          pythonRelaxDeps = [ ];
+          pythonRelaxDeps = [
+            # "pyside6"
+          ];
 
-          additionalPackages = (with pkgs; [
-            # python312.pkgs.pyside6
+          dependencies = (with pkgs; [
+            # TODO only pyproject.toml PySide6 package fails to import PySide6.QtCore while execution
+            # PySide6 Nix Package should match the same version, resolving issue would allow to use arbitrary versions
+            python312Full.pkgs.pyside6
+
             dbus
             fontconfig
             freetype
@@ -88,85 +99,100 @@
             libpulseaudio
             libva
             libxkbcommon
-            # mesa contains libgbm
-            # mesa
             openssl
             stdenv.cc.cc.lib
             wayland
+            xorg.libX11
             xorg.libxcb
+            xorg.libXi
             xorg.libXrandr
             # QT 6.7.0
             # zstd
           ])
-          ++ (with qt6Pkgs; [
-            # `qt6.full` prevents error on KDE systems:
-            # "Cannot mix incompatible Qt library (6.7.2) with this library (6.7.1)""
+          ++ (with pkgs; [
+            # `qt6.full` prevents error with different QT version on KDE systems:
+            #   'Cannot mix incompatible Qt library (6.7.2) with this library (6.7.1)'
             qt6.full
-            # qt6.qtquick3d
-            # qt6.qtvirtualkeyboard
-            # qt6.qtwebengine
           ]);
 
+          buildInputs = with pkgs; [
+            qt6.qtbase
+          ] ++ dependencies;
+
           nativeBuildInputs = (with pkgs; [
+            copyDesktopItems
             makeWrapper
           ])
-          ++ (with qt6Pkgs; [
-            qt6.qtbase
+          ++ (with pkgs; [
             qt6.wrapQtAppsHook
           ])
-          ++ additionalPackages;
+          ++ dependencies;
 
-          buildInputs = with pkgs; [ ] ++ additionalPackages;
+          propogatedBuildInputs = with pkgs; [ ] ++ dependencies;
 
-          propogatedBuildInputs = with pkgs; [
-            # mesa
-            # python312.pkgs.pyside6
-            # qt6.qtquick3d
-            # qt6.qtvirtualkeyboard
-            # qt6.qtwebengine
-          ] ++ additionalPackages;
+          libraryPath = lib.makeLibraryPath (with pkgs; [
+            "$out"
+          ] ++ dependencies);
 
-          LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
+          binaryPath = lib.makeBinPath (with pkgs; [
+            "$out"
+          ] ++ dependencies);
 
-          # dontWrapQtApps = true;
+          desktopItems = [
+            (pkgs.makeDesktopItem {
+              name = "TagStudio";
+              desktopName = "TagStudio";
+              comment = "A User-Focused Document Management System";
+              categories = [ "AudioVideo" "Utility" "Qt" "Development" ];
+              exec = "${exeName} %U";
+              icon = "${exeName}";
+              terminal = false;
+              type = "Application";
+            })
+          ];
 
-          # preFixup = ''
-          #   wrapQtApp "$out/bin/tagstudio_dev" --prefix PATH : /path/to/bin
-          # '';
+          preInstall = ''
+            mkdir -p $out/share/icons/hicolor/256x256/apps
+            cp -rv ${projectDir}/tagstudio/resources/icon.png $out/share/icons/hicolor/256x256/apps/${exeName}.png
+          '';
         };
       in
       {
+        # $> nix run .
+        # apps.default = {
+        #   type = "app";
+        #   # name in [tool.poetry.scripts] section of pyproject.toml
+        #   program = "${tagstudioApp}/bin/${tagstudioApp.exeName}";
+        # };
+
         # $> nix build .
         packages = {
           tagstudio = tagstudioApp;
           default = tagstudioApp;
         };
 
-        # Shell for app dependencies.
+        # Development Shell including `poetry` and `qtcreator`.
         # $> nix develop
         #
-        # Use this shell for developing your app.
-        devShells.default = pkgs.mkShell {
-          inputsFrom = [ self.packages.${system}.tagstudio ];
-        };
-
-        # Shell for poetry.
-        # $> nix develop .#poetry
+        # Use this shell for developing the application and
+        # making changes to `pyproject.toml` and `poetry.lock` files.
         #
-        # Use this shell for changes to pyproject.toml and poetry.lock.
-        #   - Run `poetry install to generate an inital lock file.
-        #   - Run `poetry lock` after changing dependencies.
-        #   - Run `poetry run tagstudio` to execute the application.
-        devShells.poetry = pkgs.mkShell rec {
+        # $> poetry install                   => generate an inital lock file
+        # $> poetry lock                      => update lock file after changing dependencies
+        # $> python ./tagstudio/tag_studio.py => launch application
+        # $> poetry run tagstudio             => execute the application with poetry
+        devShells.default = pkgs.mkShell rec {
+          inputsFrom = [ self.packages.${system}.tagstudio ];
+
           packages = with pkgs; [
             poetry
             cmake
             mypy
             ruff
-          ] ++ (with qt6Pkgs; [
+          ] ++ (with pkgs; [
             qtcreator
           ])
-          ++ tagstudioApp.additionalPackages;
+          ++ tagstudioApp.dependencies;
 
           LD_LIBRARY_PATH = lib.makeLibraryPath packages;
         };
