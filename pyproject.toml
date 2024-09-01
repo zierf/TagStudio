@@ -47,6 +47,9 @@ rawpy = "0.21.0"
 pillow-heif = "0.16.0"
 chardet = "5.2.0"
 
+[tool.poetry.group.dev]
+optional = true
+
 [tool.poetry.group.dev.dependencies]
 #mypy = "1.10.0"
 pre-commit = "3.7.0"

@@ -161,11 +161,13 @@
     in
     {
       # $> nix run
-      # apps.default = {
-      #   type = "app";
-      #   # name in [tool.poetry.scripts] section of pyproject.toml
-      #   program = "${tagstudioApp}/bin/${tagstudioApp.exeName}";
-      # };
+      # apps = eachSystem (system: {
+      #   default = {
+      #     type = "app";
+      #     # name in [tool.poetry.scripts] section of pyproject.toml
+      #     program = "${tagstudioApp."${system}"}/bin/${tagstudioApp."${system}".exeName}";
+      #   };
+      # });
 
       # $> nix run
       packages = eachSystem (system: {
@@ -185,6 +187,7 @@
       # $> poetry run tagstudio             => execute the application with poetry
       devShells = eachSystem (system: {
         default = pkgs.${system}.mkShell rec {
+          #inputsFrom = [ self.apps.${system}.default ];
           inputsFrom = [ self.packages.${system}.tagstudio ];
 
           packages = with pkgs.${system}; [
