@@ -23,9 +23,9 @@ readme = "README.md"
 #   "tagstudio/**/*.bat",
 #   "tagstudio/**/*.spec",
 # ]
-# packages = [
-#   { include = "tagstudio", from = "." },
-# ]
+packages = [
+  { include = "tagstudio", from = "." },
+]
 
 [build-system]
 requires = ["poetry-core"]
