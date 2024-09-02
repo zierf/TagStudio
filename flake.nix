@@ -6,7 +6,10 @@
 
     supportedSystems.url = "github:nix-systems/default-linux";
 
-    poetry2nix.url = "github:nix-community/poetry2nix";
+    poetry2nix = {
+      url = "github:nix-community/poetry2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { self, nixpkgs, poetry2nix, ... } @inputs:
