@@ -49,48 +49,18 @@
 
           pythonRelaxDeps = [ ];
 
-          dependencies = (with pkgs.${system}; [
-            dbus
-            fontconfig
-            freetype
-            glib
-            libGL
-            libkrb5
-            libpulseaudio
-            libva
-            libxkbcommon
-            openssl
-            stdenv.cc.cc.lib
-            wayland
-            xorg.libX11
-            xorg.libxcb
-            xorg.libXi
-            xorg.libXrandr
-            # `qt6.full` prevents error with different QT version on KDE systems:
-            #   'Cannot mix incompatible Qt library (6.7.2) with this library (6.7.1)'
-            qt6.full
-          ]);
-
           buildInputs = (with pkgs.${system}; [
+            qt6.qtmultimedia
             qt6.qtbase
-          ]) ++ dependencies;
+          ]);
 
           nativeBuildInputs = (with pkgs.${system}; [
             copyDesktopItems
             makeWrapper
             qt6.wrapQtAppsHook
-          ])
-          ++ dependencies;
+          ]);
 
-          propogatedBuildInputs = (with pkgs.${system}; [ ]) ++ dependencies;
-
-          # libraryPath = pkgs.${system}.lib.makeLibraryPath ((with pkgs.${system}; [
-          #   "$out"
-          # ]) ++ dependencies);
-
-          # binaryPath = pkgs.${system}.lib.makeBinPath ((with pkgs.${system}; [
-          #   "$out"
-          # ]) ++ dependencies);
+          propogatedBuildInputs = (with pkgs.${system}; [ ]);
 
           desktopItems = [
             (pkgs.${system}.makeDesktopItem {
@@ -113,15 +83,6 @@
       );
     in
     {
-      # apps = eachSystem (system: {
-      #   # $> nix run
-      #   default = {
-      #     type = "app";
-      #     # name in [tool.poetry.scripts] section of pyproject.toml
-      #     program = "${tagstudioApp."${system}"}/bin/${tagstudioApp."${system}".exeName}";
-      #   };
-      # });
-
       packages = eachSystem (system: {
         # $> nix run tagstudio
         tagstudio = tagstudioApp.${system};
@@ -141,20 +102,37 @@
         # $> python ./tagstudio/tag_studio.py => launch application via Python
         # $> poetry run tagstudio             => execute the application via Poetry
         default = pkgs.${system}.mkShell rec {
-          #inputsFrom = [ self.apps.${system}.default ];
-          inputsFrom = [ self.packages.${system}.tagstudio ];
+          inputsFrom = [ tagstudioApp.${system} ];
 
-          packages = with pkgs.${system}; [
+          packages = (with pkgs.${system}; [
             poetry
             cmake
+            cmake-format
             mypy
-            ruff
-          ] ++ (with pkgs.${system}; [
             qtcreator
-          ])
-          ++ tagstudioApp.${system}.dependencies;
+            ruff
+          ]);
 
-          LD_LIBRARY_PATH = pkgs.${system}.lib.makeLibraryPath packages;
+          # needed for `poetry run`
+          buildInputs = tagstudioApp.${system}.buildInputs ++ (with pkgs.${system}; [
+            stdenv.cc.cc.lib
+            dbus
+            fontconfig
+            freetype
+            glib
+            libGL
+            libkrb5
+            libpulseaudio
+            libva
+            libxkbcommon
+            openssl
+            xorg.libXrandr
+          ]);
+
+          nativeBuildInputs = tagstudioApp.${system}.nativeBuildInputs;
+          propogatedBuildInputs = tagstudioApp.${system}.propogatedBuildInputs;
+
+          LD_LIBRARY_PATH = pkgs.${system}.lib.makeLibraryPath (buildInputs ++ packages);
         };
 
         # Shell for poetry.
