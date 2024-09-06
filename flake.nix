@@ -102,6 +102,22 @@
               type = "Application";
             })
           ];
+
+          meta = eachSystem (
+            system: with pkgs.${system}.lib; {
+              mainProgram = " ${pname}";
+              description = "A User-Focused Document Management System";
+              longDescription = ''
+                TagStudio is a photo & file organization application with an underlying system
+                that focuses on giving freedom and flexibility to the user.
+                No proprietary programs or formats, no sea of sidecar files,
+                and no complete upheaval of your filesystem structure.
+              '';
+              homepage = "https://github.com/TagStudioDev/TagStudio";
+              license = licenses.gpl3Only;
+              platforms = platforms.linux;
+            }
+          );
         }
       );
     in
