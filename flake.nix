@@ -173,8 +173,8 @@
         # $> poetry install
         #
         # Use this shell for changes to pyproject.toml and poetry.lock.
-        devShells.poetry = pkgs.mkShell {
-          packages = [ pkgs.poetry ];
+        poetry = pkgs.${system}.mkShell {
+          packages = [ pkgs.${system}.poetry ];
         };
       });
     };
