@@ -37,9 +37,9 @@
       tagstudioApp = eachSystem (
         system:
         mkPoetryApplication.${system} rec {
-          projectDir = self;
+          pname = "tagstudio";
 
-          exeName = "tagstudio";
+          projectDir = self;
 
           python = pkgs.${system}.python312;
           dontWrapQtApps = false;
@@ -81,28 +81,27 @@
 
           propogatedBuildInputs = (with pkgs.${system}; [ ]);
 
+          preInstall = ''
+            mkdir -p $out/share/icons/hicolor/512x512/apps
+            cp -rv ${projectDir}/tagstudio/resources/icon.png $out/share/icons/hicolor/512x512/apps/${pname}.png
+          '';
+
           desktopItems = [
             (pkgs.${system}.makeDesktopItem {
-              name = "TagStudio";
+              name = "${pname}";
               desktopName = "TagStudio";
+              genericName = "Tagging Document Management System";
               comment = "A User-Focused Document Management System";
               categories = [
                 "AudioVideo"
-                "Utility"
                 "Qt"
-                "Development"
               ];
-              exec = "${exeName} %U";
-              icon = "${exeName}";
+              exec = "${pname}";
+              icon = "${pname}";
               terminal = false;
               type = "Application";
             })
           ];
-
-          preInstall = ''
-            mkdir -p $out/share/icons/hicolor/256x256/apps
-            cp -rv ${projectDir}/tagstudio/resources/icon.png $out/share/icons/hicolor/256x256/apps/${exeName}.png
-          '';
         }
       );
     in

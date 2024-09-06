@@ -295,7 +295,7 @@ class QtDriver(QObject):
 
         if sys.platform == "linux":
             # app icon must be defined in a .desktop file to be displayed under Wayland
-            app.setDesktopFileName("TagStudio");
+            app.setDesktopFileName("tagstudio");
 
         menu_bar = QMenuBar(self.main_window)
         self.main_window.setMenuBar(menu_bar)
