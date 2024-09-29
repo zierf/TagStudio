@@ -42,23 +42,13 @@
           projectDir = self;
 
           python = pkgs.${system}.python312;
-          dontWrapQtApps = false;
-
-          # preferWheels to resolve typing stubs error for opencv-python:
-          #   'Failed to resolve alias "GProtoArg" exposed as "GProtoArg"'
-          # https://github.com/opencv/opencv-python/issues/1010
           preferWheels = true;
 
+          dontWrapQtApps = false;
+
           # extend official overrides
-          # https://github.com/nix-community/poetry2nix/blob/7619e43c2b48c29e24b88a415256f09df96ec276/overrides/default.nix#L2743-L2805
-          overrides = defaultPoetryOverrides.${system}.extend (
-            final: prev: {
-              # Overrides for PySide6
-              # https://github.com/nix-community/poetry2nix/issues/1191#issuecomment-1707590287
-              pyside6 = final.pkgs.python312.pkgs.pyside6;
-              #shiboken6 = final.pkgs.python3.pkgs.shiboken6;
-            }
-          );
+          # https://github.com/nix-community/poetry2nix/blob/aea314e/overrides/default.nix#L2776-L2844
+          # overrides = defaultPoetryOverrides.${system}.extend (final: prev: { });
 
           pythonRelaxDeps = [ ];
 
